@@ -3,17 +3,21 @@ pub mod aoc2024 {
     use std::fs::File;
     use std::io::{self, BufRead, Error};
     // returns the path based on the test flag
-    pub fn get_data_path(test: bool) -> String {
+    pub fn get_data_path(test: bool, part: u32) -> String {
         if test {
-            return "./data/test-data".to_string();
+            if part == 1 {
+                return "./data/test-data".to_string();
+            } else {
+                return "./data/test-data2".to_string();
+            }
         } else {
             return "./data/real-data".to_string();
         }
     }
 
     // returns a vec of lines as Strings
-    pub fn get_data(test: bool) -> Result<Vec<String>, Error> {
-        let path = get_data_path(test);
+    pub fn get_data(test: bool, part: u32) -> Result<Vec<String>, Error> {
+        let path = get_data_path(test, part);
         let file = File::open(path).unwrap();
         let reader = io::BufReader::new(file);
 
@@ -38,10 +42,10 @@ pub mod aoc2024 {
 
         pub fn part1(test: bool) -> Result<i32, io::Error> {
 
-            let lines = super::get_data(test);
+            let lines = super::get_data(test, 1);
 
             let mut total = 0;
-
+            
             for line in lines.unwrap() {
                 // println!("{:?}", line);
                 let multiplications = get_multiplications(&line);
@@ -62,20 +66,109 @@ pub mod aoc2024 {
             Ok(total)
         }
     
-        pub fn part2(test: bool) -> Result<u32, io::Error> {
+        pub fn part2(test: bool) -> Result<i32, io::Error> {
 
-            let lines = super::get_data(test);
+            let data = super::get_data(test, 2);
 
-            for line in lines.unwrap() {
-                println!("{}", line);
-                // let muls = get_multiplications(&line);
+            if data.is_err() {
+                return Err(io::Error::new(io::ErrorKind::Other, "Error getting data"));
             }
 
-            // let count = get_safe_problem_dampener_count(lines.unwrap());
-            // Ok(count)
-            Ok(0)
+            let lines = data.unwrap();
+
+            let mut total = 0;
+
+            // put all lines into one line?
+            let line = lines.join("");
+
+            // check for do() and don't() instructions to know which mul() to use
+            // for line in lines {
+                // println!("{}", line);
+                let do_parts = get_do_parts(&line);
+                if do_parts.is_err() {
+                    return Err(io::Error::new(io::ErrorKind::Other, "Error getting do_parts"));
+                }
+                // now for each do_part, get the multiplications
+                for do_part in do_parts.unwrap() {
+                    // println!("{}", do_part);
+                    let multiplications = get_multiplications(&do_part);
+
+                    let muls = multiplications;
+
+                    // get the total of all multiplications
+                    if muls.is_ok() {
+                        let muls = muls.unwrap();
+                        // println!("{:?}", muls);
+                        for m in muls {
+                            total += m[0] * m[1];
+                        }
+                    }
+                }
+            // }
+
+            Ok(total)
         }
 
+        pub fn get_do_parts(memory: &String) -> Result<Vec<String>, String> {
+            // println!("{:?}", memory);
+            let mut do_parts = Vec::new();
+
+            let mut do_enabled = true;
+            let mut instruction_data: String = "".to_string();
+            
+            let find_do = "do()";
+            let find_dont = "don't()";
+
+            // add characters of don't() length to the instruction data
+            for i in 0..find_dont.len() {
+                instruction_data.push(memory.chars().nth(i).unwrap());
+            }
+
+            // looking for do and don't
+            for i in find_dont.len()..memory.len() {
+                if do_enabled {
+                    // println!("{:?}", instruction_data);
+                }
+
+                if do_enabled {
+                    // check for previous chars to see if they are "don't()"
+                    let prev = &memory[i - find_dont.len()..i];
+                    if prev == find_dont {
+                        // println!("DON'T: {:?}", prev);
+                        do_enabled = false;
+                        // add the instruction data to the do_parts
+                        // remove the last 6 chars
+                        instruction_data = instruction_data[..instruction_data.len() - find_dont.len()].to_string();
+                        // println!("SAVING: {:?}", instruction_data);
+                        do_parts.push(instruction_data.clone());
+                        instruction_data = "".to_string();
+                    }
+                } else {
+                    // check for previous chars to see if they are "do()"
+                    let prev = &memory[i - find_do.len()..i];
+                    if prev == find_do {
+                        // println!("DO: {:?}", prev);
+                        do_enabled = true;
+                        instruction_data = "".to_string();
+                    }
+                }
+
+                if do_enabled {
+                    instruction_data.push(memory.chars().nth(i).unwrap());
+                }
+
+            }
+
+            // add the last instruction data
+            if do_enabled {
+                do_parts.push(instruction_data.clone());
+            }
+
+            // println!("{:?}", do_parts);
+            
+            Ok(do_parts)
+            
+        }
         
         fn get_mul(mem_part: &String) -> Result<Vec<i32>, String> {
 
@@ -157,12 +250,12 @@ fn main() {
     let num1 = aoc2024::day03::part1(false).unwrap();
     println!("Answer: {}", num1);
 
-    // println!("Part 2");
-    // let num2 = aoc2024::day03::part2(false);
-    // match num2 {
-    //     Ok(n) => println!("Answer: {}", n),
-    //     Err(e) => println!("Error: {}", e)
-    // }
+    println!("Part 2");
+    let num2 = aoc2024::day03::part2(false);
+    match num2 {
+        Ok(n) => println!("Answer: {}", n),
+        Err(e) => println!("Error: {}", e)
+    }
 
 }
 
@@ -177,10 +270,17 @@ mod tests {
         let num = aoc2024::day03::part1(true).unwrap();
         assert_eq!(num, 161);
     }
+    
+    #[test]
+    fn test_get_do_parts() {
+        let line = "adon't()bcdo(dont()edo()fdont't()as";
+        let do_parts = aoc2024::day03::get_do_parts(&line.to_string()).unwrap();
+        assert_eq!(do_parts, ["a","fdont't()as"]);
+    }
 
-    // #[test]
-    // fn test_part2() {
-    //     let num = aoc2024::day03::part2(true).unwrap();
-    //     assert_eq!(num, 4);
-    // }
+    #[test]
+    fn test_part2() {
+        let num = aoc2024::day03::part2(true).unwrap();
+        assert_eq!(num, 48);
+    }
 }
